@@ -43,7 +43,7 @@ const ACCOUNT_IDS_FILE = path.join(__dirname, 'account_ids.txt');
 
 let api;
 let contract;
-
+let alice;
 // Añadimos la variable global aliceNonce
 let aliceNonce; // Variable global para el nonce de Alice
 
@@ -63,7 +63,7 @@ async function init() {
 
     // Obtenemos el nonce actual de Alice al inicializar
     const keyring = new Keyring({ type: 'sr25519' });
-    const alice = keyring.addFromUri('//Alice');
+    alice = keyring.addFromUri('//Alice');
     aliceNonce = await api.rpc.system.accountNextIndex(alice.address);
 
     // Suscribirse a los eventos

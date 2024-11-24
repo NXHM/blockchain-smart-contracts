@@ -1,0 +1,191 @@
+
+        Time: 2024-11-24T03:57:56.269Z
+        Request Number: 1
+        GroupID: 3641de78-094a-4fc2-89cf-411dd1ae0d96
+        Total Transactions: 100
+        Route: POST /create_user_with_dynamic_gas
+        Method: POST
+        RefTime (Gas Computacional): N/A
+        ProofSize: N/A
+        Tip: 37
+        Duration: 2159 ms
+        CPU Usage (start): 1.00%
+        CPU Usage (end): 1.00%
+        RAM Usage (start): 33.83%
+        RAM Usage (end): 33.53%
+        Transaction Success: Yes
+        Parameters Length: 210
+        Test Type: sequential
+        ---
+        
+        Time: 2024-11-24T03:57:58.391Z
+        Request Number: 2
+        GroupID: 3641de78-094a-4fc2-89cf-411dd1ae0d96
+        Total Transactions: 100
+        Route: POST /create_user_with_dynamic_gas
+        Method: POST
+        RefTime (Gas Computacional): N/A
+        ProofSize: N/A
+        Tip: 83
+        Duration: 2116 ms
+        CPU Usage (start): 1.00%
+        CPU Usage (end): 1.00%
+        RAM Usage (start): 33.53%
+        RAM Usage (end): 33.35%
+        Transaction Success: Yes
+        Parameters Length: 210
+        Test Type: sequential
+        ---
+        
+        Time: 2024-11-24T03:58:00.522Z
+        Request Number: 3
+        GroupID: 3641de78-094a-4fc2-89cf-411dd1ae0d96
+        Total Transactions: 100
+        Route: POST /create_user_with_dynamic_gas
+        Method: POST
+        RefTime (Gas Computacional): N/A
+        ProofSize: N/A
+        Tip: 90
+        Duration: 2127 ms
+        CPU Usage (start): 1.00%
+        CPU Usage (end): 1.00%
+        RAM Usage (start): 33.35%
+        RAM Usage (end): 33.38%
+        Transaction Success: Yes
+        Parameters Length: 210
+        Test Type: sequential
+        ---
+        
+        Time: 2024-11-24T03:58:02.660Z
+        Request Number: 4
+        GroupID: 3641de78-094a-4fc2-89cf-411dd1ae0d96
+        Total Transactions: 100
+        Route: POST /create_user_with_dynamic_gas
+        Method: POST
+        RefTime (Gas Computacional): N/A
+        ProofSize: N/A
+        Tip: 67
+        Duration: 2136 ms
+        CPU Usage (start): 1.00%
+        CPU Usage (end): 1.00%
+        RAM Usage (start): 33.38%
+        RAM Usage (end): 33.44%
+        Transaction Success: Yes
+        Parameters Length: 210
+        Test Type: sequential
+        ---
+        
+        Time: 2024-11-24T03:58:04.811Z
+        Request Number: 5
+        GroupID: 3641de78-094a-4fc2-89cf-411dd1ae0d96
+        Total Transactions: 100
+        Route: POST /create_user_with_dynamic_gas
+        Method: POST
+        RefTime (Gas Computacional): N/A
+        ProofSize: N/A
+        Tip: 89
+        Duration: 2147 ms
+        CPU Usage (start): 1.00%
+        CPU Usage (end): 1.00%
+        RAM Usage (start): 33.44%
+        RAM Usage (end): 33.47%
+        Transaction Success: Yes
+        Parameters Length: 210
+        Test Type: sequential
+        ---
+        
+        Time: 2024-11-24T03:58:06.939Z
+        Request Number: 6
+        GroupID: 3641de78-094a-4fc2-89cf-411dd1ae0d96
+        Total Transactions: 100
+        Route: POST /create_user_with_dynamic_gas
+        Method: POST
+        RefTime (Gas Computacional): N/A
+        ProofSize: N/A
+        Tip: 30
+        Duration: 2125 ms
+        CPU Usage (start): 1.00%
+        CPU Usage (end): 1.00%
+        RAM Usage (start): 33.47%
+        RAM Usage (end): 33.48%
+        Transaction Success: Yes
+        Parameters Length: 210
+        Test Type: sequential
+        ---
+        
+        Time: 2024-11-24T03:58:09.068Z
+        Request Number: 7
+        GroupID: 3641de78-094a-4fc2-89cf-411dd1ae0d96
+        Total Transactions: 100
+        Route: POST /create_user_with_dynamic_gas
+        Method: POST
+        RefTime (Gas Computacional): N/A
+        ProofSize: N/A
+        Tip: 38
+        Duration: 2125 ms
+        CPU Usage (start): 1.00%
+        CPU Usage (end): 1.00%
+        RAM Usage (start): 33.48%
+        RAM Usage (end): 33.49%
+        Transaction Success: Yes
+        Parameters Length: 210
+        Test Type: sequential
+        ---
+        
+        Time: 2024-11-24T03:58:11.201Z
+        Request Number: 8
+        GroupID: 3641de78-094a-4fc2-89cf-411dd1ae0d96
+        Total Transactions: 100
+        Route: POST /create_user_with_dynamic_gas
+        Method: POST
+        RefTime (Gas Computacional): N/A
+        ProofSize: N/A
+        Tip: 52
+        Duration: 2131 ms
+        CPU Usage (start): 1.00%
+        CPU Usage (end): 1.00%
+        RAM Usage (start): 33.49%
+        RAM Usage (end): 33.50%
+        Transaction Success: Yes
+        Parameters Length: 210
+        Test Type: sequential
+        ---
+        
+        Time: 2024-11-24T03:58:13.331Z
+        Request Number: 9
+        GroupID: 3641de78-094a-4fc2-89cf-411dd1ae0d96
+        Total Transactions: 100
+        Route: POST /create_user_with_dynamic_gas
+        Method: POST
+        RefTime (Gas Computacional): N/A
+        ProofSize: N/A
+        Tip: 92
+        Duration: 2128 ms
+        CPU Usage (start): 1.00%
+        CPU Usage (end): 1.00%
+        RAM Usage (start): 33.50%
+        RAM Usage (end): 33.51%
+        Transaction Success: Yes
+        Parameters Length: 210
+        Test Type: sequential
+        ---
+        
+        Time: 2024-11-24T03:58:15.448Z
+        Request Number: 10
+        GroupID: 3641de78-094a-4fc2-89cf-411dd1ae0d96
+        Total Transactions: 100
+        Route: POST /create_user_with_dynamic_gas
+        Method: POST
+        RefTime (Gas Computacional): N/A
+        ProofSize: N/A
+        Tip: 66
+        Duration: 2115 ms
+        CPU Usage (start): 1.00%
+        CPU Usage (end): 1.00%
+        RAM Usage (start): 33.51%
+        RAM Usage (end): 33.55%
+        Transaction Success: Yes
+        Parameters Length: 211
+        Test Type: sequential
+        ---
+        
