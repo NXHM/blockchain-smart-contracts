@@ -4,12 +4,15 @@ const { ApiPromise, WsProvider, Keyring } = require('@polkadot/api');
 const { ContractPromise } = require('@polkadot/api-contract');
 const { mnemonicGenerate } = require('@polkadot/util-crypto');
 const fs = require('fs');
+const axios = require('axios');
 const path = require('path');
 const os = require('os');
 require('dotenv').config();
 const { logRequestToTxt, logRequestToJson } = require('./logging_middleware');
 
 const { getTip } = require('./tip_manager');
+
+const FABRIC_SERVER_URL = 'http://localhost:4000'; // Dirección del servidor de Hyperledger Fabric
 
 const app = express();
 const port = 3000;
@@ -24,7 +27,7 @@ app.use(cors(corsOptions));
 app.use(express.json());
 
 // Contract Dirección y ABI
-const CONTRACT_ADDRESS = '5F5GArrrZiJZBjKS1GciaB3BijUFVQKU1w6hohye388Q7WdL';
+const CONTRACT_ADDRESS = '5D5FutbzPkP87dDu8CgGmu3mkwD4Dd1PchPnsmrDsjs7U7cL';
 const CONTRACT_ABI_PATH = path.resolve(__dirname, '../target/ink/smart_contract/smart_contract.json');
 
 // Performance monitoring configuration
@@ -43,7 +46,7 @@ const ACCOUNT_IDS_FILE = path.join(__dirname, 'account_ids.txt');
 
 let api;
 let contract;
-
+let alice;
 // Añadimos la variable global aliceNonce
 let aliceNonce; // Variable global para el nonce de Alice
 
@@ -63,7 +66,7 @@ async function init() {
 
     // Obtenemos el nonce actual de Alice al inicializar
     const keyring = new Keyring({ type: 'sr25519' });
-    const alice = keyring.addFromUri('//Alice');
+    alice = keyring.addFromUri('//Alice');
     aliceNonce = await api.rpc.system.accountNextIndex(alice.address);
 
     // Suscribirse a los eventos
@@ -103,7 +106,7 @@ async function init() {
 
 // Mantenemos la función getAndIncrementNonce
 async function getAndIncrementNonce() {
-    await syncNonce(); // Sincronizar el aliceNonce con la blockchain
+    //await syncNonce(); // Sincronizar el aliceNonce con la blockchain
     const currentNonce = aliceNonce;
     aliceNonce = aliceNonce.addn(1); // Incrementar el nonce
     return currentNonce;
@@ -336,7 +339,7 @@ app.post('/create_user', async (req, res) => {
 
     try {
         const keyring = new Keyring({ type: 'sr25519' });
-        const alice = keyring.addFromUri('//Alice'); // Usar la cuenta de Alice para firmar la transacción
+        alice = keyring.addFromUri('//Alice'); // Usar la cuenta de Alice para firmar la transacción
 
         // Transferir fondos a la nueva cuenta usando transferKeepAlive
         //await transferFunds(alice, newAccount.address, 1000000000000);
@@ -378,7 +381,7 @@ app.post('/create_user_based_on_personalized_mnemonic', async (req, res) => {
 
     try {
         const keyring = new Keyring({ type: 'sr25519' });
-        const alice = keyring.addFromUri('//Alice'); // Usar la cuenta de Alice para firmar la transacción
+        alice = keyring.addFromUri('//Alice'); // Usar la cuenta de Alice para firmar la transacción
 
         // Transferir fondos a la nueva cuenta usando transferKeepAlive
         await transferFunds(alice, newAccount.address, 1000000000000);
@@ -424,7 +427,7 @@ app.post('/create_user_with_existing_address', async (req, res) => {
     };
 
     try {
-        const alice = keyring.addFromUri('//Alice'); // Use Alice's account to sign the transaction
+        alice = keyring.addFromUri('//Alice'); // Use Alice's account to sign the transaction
 
         // Transfer funds to the user's address using transferKeepAlive
         await transferFunds(alice, userAddress, 1000000000000);
@@ -509,7 +512,7 @@ app.get('/get_role/:publicAddress', async (req, res) => {
 // Endpoint para obtener la dirección de Alice
 app.get('/alice_account_id', async (req, res) => {
     const keyring = new Keyring({ type: 'sr25519' });
-    const alice = keyring.addFromUri('//Alice');
+    alice = keyring.addFromUri('//Alice');
     res.status(200).send(`Alice's account: ${alice.address}`);
 });
 
@@ -599,7 +602,7 @@ app.post('/create_user_with_dynamic_gas', async (req, res) => {
 
     try {
         const keyring = new Keyring({ type: 'sr25519' });
-        const alice = keyring.addFromUri('//Alice'); // Usar la cuenta de Alice para firmar la transacción
+        alice = keyring.addFromUri('//Alice'); // Usar la cuenta de Alice para firmar la transacción
 
         const newAccount = createNewAccount(); // Genera una nueva cuenta
 
@@ -699,6 +702,58 @@ app.post('/grant_permission', async (req, res) => {
     } catch (error) {
         res.locals.transactionSuccess = false;
         res.status(500).send(`Error al otorgar el permiso: ${error.message}`);
+    }
+});
+
+app.post('/verify_hyperledger_user', async (req, res) => {
+    const { org, dni, role } = req.body;
+
+    try {
+        // Realizar solicitud al servidor de Hyperledger Fabric
+        const response = await axios.post('`${FABRIC_SERVER_URL}/verify_hyperledger_user', {
+            org,
+            dni,
+            role,
+        });
+
+        res.status(200).json({
+            message: 'Usuario verificado exitosamente en Hyperledger Fabric.',
+            data: response.data,
+        });
+    } catch (error) {
+        res.status(500).json({
+            error: `Error verificando usuario en Hyperledger Fabric: ${error.message}`,
+        });
+    }
+});
+
+// Endpoint para leer el HME desde Polkadot
+app.post('/read_hme', async (req, res) => {
+    const { org, readerDni, patientDni } = req.body;
+
+    // Validar los datos de entrada
+    if (!org || !readerDni || !patientDni) {
+        return res.status(400).json({ error: 'Organización, DNI del lector y del paciente son requeridos.' });
+    }
+
+    try {
+        // Enviar solicitud al servidor de Hyperledger Fabric
+        const response = await axios.post(`${FABRIC_SERVER_URL}/read_hme`, {
+            org,
+            readerDni,
+            patientDni,
+        });
+
+        // Responder con los datos obtenidos
+        res.status(200).json({
+            message: 'HME leído exitosamente desde Hyperledger Fabric.',
+            data: response.data,
+        });
+    } catch (error) {
+        console.error(`Error leyendo HME desde Hyperledger Fabric: ${error.message}`);
+        res.status(500).json({
+            error: `Error leyendo HME desde Hyperledger Fabric: ${error.message}`,
+        });
     }
 });
 
