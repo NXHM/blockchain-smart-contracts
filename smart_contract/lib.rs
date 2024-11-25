@@ -41,6 +41,12 @@ mod access_control {
         target: AccountId,
     }
 
+    #[ink::event]
+    pub struct ErrorEvent {
+        #[ink(topic)]
+        message: String,
+    }
+
     #[ink::scale_derive(Encode, Decode, TypeInfo)]
     #[cfg_attr(
         feature = "std",
@@ -77,7 +83,7 @@ mod access_control {
             }
         }
 
-        #[ink(message)]
+        #[ink(message, payable)]
         pub fn add_user(
             &mut self,
             account_id: AccountId,
@@ -86,16 +92,20 @@ mod access_control {
         ) -> Result<(), String> {
             // Control Secundario de Datos
             if user_info.name.is_empty() || user_info.name.len() > 12 {
-                return Err("Nombre no válido".to_string());
+                self.env().emit_event(ErrorEvent { message: "Nombre inválido".to_string() });
+                return Err("Nombre inválido".to_string());
             }
             if user_info.lastname.is_empty() || user_info.lastname.len() > 12 {
-                return Err("Apellido no válido".to_string());
+                self.env().emit_event(ErrorEvent { message: "Apellido inválido".to_string() });
+                return Err("Apellido inválido".to_string());
             }
             if user_info.dni.is_empty() || user_info.dni.len() != 8 {
-                return Err("DNI no válido".to_string());
+                self.env().emit_event(ErrorEvent { message: "DNI inválido".to_string() });
+                return Err("DNI inválido".to_string());
             }
             if user_info.email.is_empty() || !user_info.email.contains('@') {
-                return Err("Email no válido".to_string());
+                self.env().emit_event(ErrorEvent { message: "Email inválido".to_string() });
+                return Err("Email inválido".to_string());
             }
             
 
@@ -103,14 +113,15 @@ mod access_control {
             let accounts = self.accounts.get(&user_info.dni).unwrap_or([None, None]);
             let account_count = accounts.iter().filter(|acc| acc.is_some()).count();
             if account_count >= 2 {
-                return Err("El DNI ya tiene dos cuentas asociadas".to_string());
+                self.env().emit_event(ErrorEvent { message: "DNI ya tiene el máximo de cuentas".to_string() });
+                return Err("DNI ya tiene el máximo de cuentas".to_string());
             }
 
             // Verificar que los roles sean distintos
             for acc in accounts.iter().filter_map(|acc| acc.as_ref()) {
-                let existing_role = self.roles.get(acc).unwrap_or(2); // 2 indica rol no definido
-                if existing_role == role {
-                    return Err("Ambos account_id no pueden tener el mismo rol".to_string());
+                if self.roles.get(*acc).unwrap_or(0) == role {
+                    self.env().emit_event(ErrorEvent { message: "Rol ya asignado a otra cuenta".to_string() });
+                    return Err("Rol ya asignado a otra cuenta".to_string());
                 }
             }
 
@@ -128,7 +139,7 @@ mod access_control {
 
             // Agregar el rol al mapa de roles
             self.roles.insert(&account_id, &role);
-            self.env().emit_event(RoleAssigned { account: account_id, role:role });
+            self.env().emit_event(RoleAssigned { account: account_id, role });
             // Emitir evento de usuario agregado
             self.env().emit_event(UserAdded { account: account_id });
 
@@ -136,7 +147,7 @@ mod access_control {
         }
     
 
-        #[ink(message)]
+        #[ink(message, payable)]
         pub fn assign_role(
             &mut self,
             account_id: AccountId,
@@ -144,6 +155,12 @@ mod access_control {
         ) -> String {
             self.roles.insert(account_id, &role);
             self.env().emit_event(RoleAssigned { account: account_id, role });
+
+            if role > 2 {
+                self.env().emit_event(ErrorEvent { message: "Rol inválido".to_string() });
+                return "Rol inválido".to_string();
+            }
+
             format!("Rol {} asignado a la cuenta {:?}", role, account_id)
         }
 
@@ -163,6 +180,7 @@ mod access_control {
         ) -> Result<(), String> {
             // Verificar si el permiso ya ha sido concedido
             if self.permissions.get((granter, grantee)).unwrap_or(false) {
+                self.env().emit_event(ErrorEvent { message: "Permiso ya concedido".to_string() });
                 return Err("Permiso ya concedido".to_string());
             }
 
@@ -193,7 +211,8 @@ mod access_control {
         ) -> Result<(), String> {
             // Verificar si el permiso existe
             if !self.permissions.get((granter, grantee)).unwrap_or(false) {
-                return Err("No existe permiso para revocar".to_string());
+                self.env().emit_event(ErrorEvent { message: "Permiso no existe".to_string() });
+                return Err("Permiso no existe".to_string());
             }
 
             // Eliminar el permiso del mapping

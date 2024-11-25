@@ -27,7 +27,7 @@ app.use(cors(corsOptions));
 app.use(express.json());
 
 // Contract Dirección y ABI
-const CONTRACT_ADDRESS = '5D5FutbzPkP87dDu8CgGmu3mkwD4Dd1PchPnsmrDsjs7U7cL';
+const CONTRACT_ADDRESS = '5DWhFhzyo1bQj7eCgCz4qpSXb4cdeSkzRhebZtw9R8P741Dx';
 const CONTRACT_ABI_PATH = path.resolve(__dirname, '../target/ink/smart_contract/smart_contract.json');
 
 // Performance monitoring configuration
@@ -97,6 +97,20 @@ async function init() {
                         console.error(`Error processing event data: ${innerError.message}`);
                     }
                 });
+
+                // Manejar específicamente el evento RoleAssigned
+                if (event.section === 'access_control' && event.method === 'RoleAssigned') {
+                    const [account, role] = event.data;
+                    console.log(`Rol asignado: Cuenta ${account} con rol ${role}`);
+                    // Aquí puedes agregar lógica adicional, como actualizar una base de datos
+                }
+
+                // Manejar el nuevo evento de error
+                if (event.section === 'access_control' && event.method === 'ErrorEvent') {
+                    const [message] = event.data;
+                    console.error(`Error del contrato: ${message}`);
+                }
+
             } catch (error) {
                 console.error(`Error processing event: ${error.message}`);
             }
@@ -104,9 +118,8 @@ async function init() {
     });
 }
 
-// Mantenemos la función getAndIncrementNonce
-async function getAndIncrementNonce() {
-    //await syncNonce(); // Sincronizar el aliceNonce con la blockchain
+// Mantenemos la función getAndIncrementNonce sin sincronización
+function getAndIncrementNonce() {
     const currentNonce = aliceNonce;
     aliceNonce = aliceNonce.addn(1); // Incrementar el nonce
     return currentNonce;
@@ -161,95 +174,139 @@ function createNewAccount(customText = null) {
 
 // Función para transferir fondos con tip incluido usando transferKeepAlive
 async function transferFunds(sender, recipient, amount) {
-    const tip = getTip(); // Obtener el tip usando la función getTip
-    const nonce = await getAndIncrementNonce(); // Usar el nonce incrementado
+    const tip = getTip();
+    let nonce = getAndIncrementNonce(); // Obtener el nonce local
     const transfer = api.tx.balances.transferKeepAlive(recipient, amount);
 
     return new Promise((resolve, reject) => {
-        transfer.signAndSend(sender, { nonce, tip }, (result) => {
-            if (result.status.isInBlock) {
-                console.log(`Transferencia incluida en el bloque: ${result.status.asInBlock}`);
-            }
-            if (result.status.isFinalized) {
-                console.log(`Transferencia finalizada en el bloque: ${result.status.asFinalized}`);
-                resolve(result); // La transacción ha sido finalizada correctamente, continuar con las siguientes funciones
-            }
-            if (result.isError) {
-                console.error('Error en la transferencia:', result);
-                reject(new Error('Error en la transferencia.')); // Rechazar si hay un error
-            }
-        }).catch((error) => {
-            reject(new Error(`Error en la transferencia: ${error.message}`)); // Capturar errores inesperados
-        });
+        function sendTransaction(currentNonce) {
+            transfer.signAndSend(sender, { nonce: currentNonce, tip }, ({ events = [], status }) => {
+                if (status.isInBlock || status.isFinalized) {
+                    console.log(`Transacción incluida en el bloque: ${status.isInBlock ? status.asInBlock : status.asFinalized}`);
+
+                    // Iterar sobre los eventos para capturar errores
+                    let hasError = false;
+                    events.forEach(({ event: { data, method, section } }) => {
+                        if (section === 'system' && method === 'ExtrinsicFailed') {
+                            hasError = true;
+                            const [dispatchError] = data;
+                            if (dispatchError.isModule) {
+                                const decoded = api.registry.findMetaError(dispatchError.asModule);
+                                const { documentation, name, section } = decoded;
+                                const errorMessage = documentation ? documentation.join(' ') : 'Sin documentación disponible';
+                                console.error(`Error en la transferencia: ${section}.${name}: ${errorMessage}`);
+                                reject(new Error(`${section}.${name}: ${errorMessage}`));
+                            } else {
+                                console.error(`Error en la transferencia: ${dispatchError.toString()}`);
+                                reject(new Error(dispatchError.toString()));
+                            }
+                        }
+                    });
+
+                    if (!hasError) {
+                        console.log('Transferencia exitosa');
+                        resolve();
+                    }
+                } else if (status.isError) {
+                    console.error('Error en la transferencia:', status);
+                    reject(new Error('Error en la transferencia.'));
+                }
+            }).catch(async (error) => {
+                if (error.message.includes('1010') || error.message.includes('Invalid Transaction')) {
+                    console.error('Nonce incorrecto, sincronizando y reintentando...');
+                    await syncNonce(); // Sincronizar el nonce
+                    nonce = getAndIncrementNonce(); // Obtener el nuevo nonce
+                    sendTransaction(nonce); // Reintentar la transacción
+                } else {
+                    console.error(`Error en la transferencia: ${error}`);
+                    reject(error);
+                }
+            });
+        }
+
+        sendTransaction(nonce); // Enviar la transacción inicial
     });
 }
 
 
 // Modificar la función addUser para incluir el tip en la transacción
 // Modificar la función addUser para incluir el tip en la transacción y guardar el gas consumido
-async function addUser(alice, newAccount, userInfo, role, gasLimit, res) {
+async function addUser(alice, newAccount, userInfo, role, gasLimit, res, mode) {
     updateTransactionCount();
     const numberTransaction = transactionCount;
     const tip = getTip(); // Obtener el tip usando la función getTip
-    const nonce = await getAndIncrementNonce(); // Usar el nonce incrementado
-    const addUserTx = contract.tx.addUser({ value: 0, gasLimit }, newAccount.address, userInfo, role);
+    let nonce = getAndIncrementNonce(); // Obtener el nonce local
+    // Cambiar la siguiente línea para definir gasLimit correctamente sin addn
+    const addUserTx = contract.tx.addUser({ value: 0, gasLimit: gasLimit }, newAccount.address, userInfo, role);
 
     // Inicializar variables para el gas
     let refTime = null;
     let proofSize = null;
 
     return new Promise((resolve, reject) => {
-        addUserTx.signAndSend(alice, { nonce, tip }, ({ events = [], status }) => {
-            if (status.isInBlock) {
-                console.log(`Transaction included at blockHash ${status.asInBlock}`);
+        function sendTransaction(currentNonce) {
+            addUserTx.signAndSend(alice, { nonce: currentNonce, tip }, ({ events = [], status }) => {
+                if (status.isInBlock || status.isFinalized) {
+                    console.log(`Transacción incluida en el bloque: ${status.isInBlock ? status.asInBlock : status.asFinalized}`);
 
-                // Iterar sobre los eventos para capturar errores, si los hay
-                events.forEach(({ event: { data, method, section } }) => {
-                    if (section === 'system' && method === 'ExtrinsicFailed') {
-                        const [dispatchError] = data;
-                        if (dispatchError.isModule) {
-                            const decoded = api.registry.findMetaError(dispatchError.asModule);
-                            console.error(`Error: ${decoded.section}.${decoded.name}`);
-                        } else {
-                            console.error(`Error: ${dispatchError.toString()}`);
+                    // Iterar sobre los eventos para capturar errores
+                    let hasError = false;
+                    events.forEach(({ event: { data, method, section } }) => {
+                        if (section === 'system' && method === 'ExtrinsicFailed') {
+                            hasError = true;
+                            const [dispatchError] = data;
+                            if (dispatchError.isModule) {
+                                const decoded = api.registry.findMetaError(dispatchError.asModule);
+                                const { documentation, name, section } = decoded;
+                                const errorMessage = documentation ? documentation.join(' ') : 'Sin documentación disponible';
+                                console.error(`Error del contrato: ${section}.${name}: ${errorMessage}`);
+                                reject(new Error(`${section}.${name}: ${errorMessage}`));
+                            } else {
+                                console.error(`Error del contrato: ${dispatchError.toString()}`);
+                                reject(new Error(dispatchError.toString()));
+                            }
+                        } else if (section === 'contracts' && method === 'ContractExecution') {
+                            const [contractExecResult] = data;
+                            if (contractExecResult.isFailure) {
+                                hasError = true;
+                                const debugMessage = contractExecResult.asFailure.debugMessage.toString();
+                                console.error(`Error en la ejecución del contrato: ${debugMessage}`);
+                                reject(new Error(`Error en la ejecución del contrato: ${debugMessage}`));
+                            }
                         }
-                    }
-                });
-            } else if (status.isFinalized) {
-                console.log(`Transaction finalized at blockHash ${status.asFinalized}`);
+                    });
 
-                // Iterar sobre los eventos para capturar refTime y proofSize
-                events.forEach(({ event: { data, method, section } }) => {
-                    if (section === 'system' && method === 'ExtrinsicSuccess') {
-                        // Obtener el gas computacional (refTime) y el proofSize del evento ExtrinsicSuccess
-                        if (data && data.length > 0 && data[0].weight) {
-                            refTime = data[0].weight.refTime;
-                            proofSize = data[0].weight.proofSize;
-                            console.log(`Gas (refTime) consumido: ${refTime}`);
-                            console.log(`ProofSize consumido: ${proofSize}`);
-                        }
+                    if (!hasError) {
+                        console.log('Transacción exitosa');
+                        res.locals.transactionSuccess = true;
+                        resolve();
                     }
-                });
+                } else if (status.isError) {
+                    console.error('Error en la transacción:', status);
+                    res.locals.transactionSuccess = false;
+                    reject(new Error('Error en la transacción.'));
+                }
+            }).catch(async (error) => {
+                if (error.message.includes('1010') || error.message.includes('Invalid Transaction')) {
+                    console.error('Nonce incorrecto, sincronizando y reintentando...');
+                    await syncNonce(); // Sincronizar el nonce
+                    nonce = getAndIncrementNonce(); // Obtener el nuevo nonce
+                    sendTransaction(nonce); // Reintentar la transacción
+                } else {
+                    console.error(`Transacción fallida: ${error}`);
+                    
+                    // Guardar el estado de fallo y asignar valores predeterminados
+                    res.locals.transactionSuccess = false; // Transacción fallida
+                    res.locals.refTime = 0; // Gas 0 cuando falla la transacción
+                    res.locals.proofSize = 0; // ProofSize 0 cuando falla la transacción
+                    res.locals.tip = '0'; // Tip 0 cuando falla la transacción
+                    res.locals.transactionCount = 0; // Contador de transacciones 0 cuando falla la transacción
+                    reject(error);
+                }
+            });
+        }
 
-                // Guardar refTime, proofSize, y el tip en res.locals
-                res.locals.refTime = refTime || 'N/A'; // Si no se encuentra, asignar 'N/A'
-                res.locals.proofSize = proofSize || 'N/A'; // Si no se encuentra, asignar 'N/A'
-                res.locals.tip = tip.toString(); // Guardar el valor del tip
-                res.locals.transactionSuccess = true; // Transacción exitosa
-                res.locals.transactionCount = numberTransaction; // Guardamos el contador de la transacción
-                resolve(status);
-            }
-        }).catch(error => {
-            console.error(`Transaction failed: ${error}`);
-            
-            // Guardar el estado de fallo y asignar valores predeterminados
-            res.locals.transactionSuccess = false; // Transacción fallida
-            res.locals.refTime = 0; // Gas 0 cuando falla la transacción
-            res.locals.proofSize = 0; // ProofSize 0 cuando falla la transacción
-            res.locals.tip = '0'; // Tip 0 cuando falla la transacción
-            res.locals.transactionCount = 0; // Contador de transacciones 0 cuando falla la transacción
-            reject(error);
-        });
+        sendTransaction(nonce); // Enviar la transacción inicial
     });
 }
 
@@ -325,7 +382,7 @@ app.get('/get_accounts/:dni', async (req, res) => {
     }
 });
 
-// Endpoint para crear un usuario
+// Modificar el endpoint para crear un usuario
 app.post('/create_user', async (req, res) => {
     const { name, lastname, dni, email, role } = req.body;
     const newAccount = createNewAccount(); // Genera una nueva cuenta
@@ -339,74 +396,27 @@ app.post('/create_user', async (req, res) => {
 
     try {
         const keyring = new Keyring({ type: 'sr25519' });
-        alice = keyring.addFromUri('//Alice'); // Usar la cuenta de Alice para firmar la transacción
+        alice = keyring.addFromUri('//Alice'); // Usar la cuenta de Alice
 
-        // Transferir fondos a la nueva cuenta usando transferKeepAlive
-        //await transferFunds(alice, newAccount.address, 1000000000000);
-
-        // Esperar un poco para asegurarse de que la transferencia se haya completado
-        await new Promise(resolve => setTimeout(resolve, 6000));
-
+        // Definir un límite de gas adecuado
         const gasLimit = api.registry.createType('WeightV2', {
-            refTime: api.registry.createType('Compact<u64>', 10000000000),
+            refTime: api.registry.createType('Compact<u64>', 20000000000),
             proofSize: api.registry.createType('Compact<u64>', 10000000)
         });
 
-        console.log("Gas limit: ", gasLimit);
-        // Añadir el usuario y su información, pasando el objeto res
-        await addUser(alice, newAccount, userInfo, role, gasLimit, res);
-        // Eliminado: res.locals.refTime = addUserTx.gasConsumed.refTime;
-        // Eliminado: res.locals.proofSize = addUserTx.gasConsumed.proofSize;
-
-        // Si la adición del usuario fue exitosa, agregar el rol (si es necesario)
-        // await assignRole(alice, newAccount, role, userInfo, gasLimit);
-
-        res.status(200).send(`User and role added successfully`);
-    } catch (error) {
-        res.status(500).send(`Error assigning role: ${error.message}`);
-    }
-});
-
-// Endpoint para crear un usuario basado en un mnemonic personalizado
-app.post('/create_user_based_on_personalized_mnemonic', async (req, res) => {
-    const { address, name, lastname, dni, email, role } = req.body;
-    const newAccount = createNewAccount(address); // Genera una nueva cuenta
-
-    const userInfo = {
-        name: name,
-        lastname: lastname,
-        dni: dni,
-        email: email
-    };
-
-    try {
-        const keyring = new Keyring({ type: 'sr25519' });
-        alice = keyring.addFromUri('//Alice'); // Usar la cuenta de Alice para firmar la transacción
-
-        // Transferir fondos a la nueva cuenta usando transferKeepAlive
+        // Transferir fondos a la nueva cuenta
         await transferFunds(alice, newAccount.address, 1000000000000);
 
-        // Esperar un poco para asegurarse de que la transferencia se haya completado
-        //await new Promise(resolve => setTimeout(resolve, 6000));
-
-        const gasLimit = api.registry.createType('WeightV2', {
-            refTime: api.registry.createType('Compact<u64>', 10000000000),
-            proofSize: api.registry.createType('Compact<u64>', 10000000)
-        });
-
-        // Añadir el usuario y su información
-        await addUser(alice, newAccount, userInfo, role, gasLimit);
-
-        // Si la adición del usuario fue exitosa, agregar el rol (si es necesario)
-        // await assignRole(alice, newAccount, role, userInfo, gasLimit);
+        // Añadir el usuario con el gasLimit
+        await addUser(alice, newAccount, userInfo, role, gasLimit, res);
 
         res.status(200).send(`User and role added successfully`);
     } catch (error) {
-        res.status(500).send(`Error assigning role: ${error.message}`);
+        res.status(500).send(`Error adding user: ${error.message}`);
     }
 });
 
-// Endpoint para crear un usuario con una dirección existente
+// Modificar el endpoint para crear un usuario con una dirección existente
 app.post('/create_user_with_existing_address', async (req, res) => {
     const { address, name, lastname, dni, email, role } = req.body;
 
@@ -429,20 +439,20 @@ app.post('/create_user_with_existing_address', async (req, res) => {
     try {
         alice = keyring.addFromUri('//Alice'); // Use Alice's account to sign the transaction
 
+        // Definir un límite de gas adecuado
+        const gasLimit = api.registry.createType('WeightV2', {
+            refTime: api.registry.createType('Compact<u64>', 20000000000),
+            proofSize: api.registry.createType('Compact<u64>', 10000000)
+        });
+
         // Transfer funds to the user's address using transferKeepAlive
         await transferFunds(alice, userAddress, 1000000000000);
 
         // Wait a bit to ensure the transfer has been completed
         //await new Promise(resolve => setTimeout(resolve, 6000));
 
-        // Set up the gas limit
-        const gasLimit = api.registry.createType('WeightV2', {
-            refTime: api.registry.createType('Compact<u64>', 10000000000),
-            proofSize: api.registry.createType('Compact<u64>', 10000000)
-        });
-
-        // Add the user and their information to the contract
-        await addUser(alice, userAddress, userInfo, role, gasLimit);
+        // Add the user and their information to the contract with gasLimit
+        await addUser(alice, userAddress, userInfo, role, gasLimit, res);
 
         res.status(200).send(`User created with address ${userAddress}`);
     } catch (error) {
@@ -504,6 +514,9 @@ app.get('/role/:publicAddress', async (req, res) => {
 
 // Alias para obtener el rol de un usuario usando /get_role/:publicAddress
 app.get('/get_role/:publicAddress', async (req, res) => {
+    // Imprimir los parámetros recibidos
+    console.log('Parámetros recibidos en /get_role:', req.params);
+    
     // Reutilizar el manejador de la ruta /role/:publicAddress
     req.url = `/role/${req.params.publicAddress}`;
     return app._router.handle(req, res, () => {});
@@ -598,6 +611,9 @@ async function executeContractAndGetGas(contract, signer, res, ...params) {
 
 // Ruta POST para crear un usuario usando la función addUser con gas dinámico
 app.post('/create_user_with_dynamic_gas', async (req, res) => {
+    // Imprimir los datos recibidos del batch
+    console.log('Datos recibidos en /create_user_with_dynamic_gas:', req.body);
+    
     const { name, lastname, dni, email, role, groupID, totalTransactions, requestNumber, testType } = req.body;
 
     try {
@@ -688,6 +704,9 @@ app.get('/has_permission/:granter/:grantee', async (req, res) => {
 
 // Nuevo endpoint para otorgar permisos
 app.post('/grant_permission', async (req, res) => {
+    // Imprimir los datos recibidos para otorgar permisos
+    console.log('Datos recibidos en /grant_permission:', req.body);
+    
     const { granter, grantee, requestNumber, groupID, totalTransactions } = req.body;
 
     res.locals.requestNumber = requestNumber || 'N/A';

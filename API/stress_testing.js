@@ -295,7 +295,7 @@ async function runBatchTest(batchSize, endpoint, mode) {  // Añadir 'mode' como
     for (let i = 0; i < totalTransactions; i += batchSize) {
         const batchPromises = [];
         for (let j = 0; j < batchSize && i + j < totalTransactions; j++) {
-            const data = generatePermissionTestData();
+            const data = generateTestData();
             if (!data) return;
             requestNumber++;
             data.granter = data.granter;
