@@ -27,7 +27,7 @@ app.use(cors(corsOptions));
 app.use(express.json());
 
 // Contract Dirección y ABI
-const CONTRACT_ADDRESS = '5DWhFhzyo1bQj7eCgCz4qpSXb4cdeSkzRhebZtw9R8P741Dx';
+const CONTRACT_ADDRESS = '5EpbuBrLhhQ4T9wFcTNA7N2vcrDBKbpFyyja7WRGPsmVhhtY';
 const CONTRACT_ABI_PATH = path.resolve(__dirname, '../target/ink/smart_contract/smart_contract.json');
 
 // Performance monitoring configuration
@@ -236,7 +236,6 @@ async function addUser(alice, newAccount, userInfo, role, gasLimit, res, mode) {
     const numberTransaction = transactionCount;
     const tip = getTip(); // Obtener el tip usando la función getTip
     let nonce = getAndIncrementNonce(); // Obtener el nonce local
-    // Cambiar la siguiente línea para definir gasLimit correctamente sin addn
     const addUserTx = contract.tx.addUser({ value: 0, gasLimit: gasLimit }, newAccount.address, userInfo, role);
 
     // Inicializar variables para el gas
@@ -272,6 +271,13 @@ async function addUser(alice, newAccount, userInfo, role, gasLimit, res, mode) {
                                 const debugMessage = contractExecResult.asFailure.debugMessage.toString();
                                 console.error(`Error en la ejecución del contrato: ${debugMessage}`);
                                 reject(new Error(`Error en la ejecución del contrato: ${debugMessage}`));
+                            }
+                        } else if (section === 'system' && method === 'ExtrinsicSuccess') {
+                            // Extraer refTime y proofSize del evento
+                            const [dispatchInfo] = data;
+                            if (dispatchInfo && dispatchInfo.weight) {
+                                res.locals.refTime = dispatchInfo.weight.refTime.toString();
+                                res.locals.proofSize = dispatchInfo.weight.proofSize.toString();
                             }
                         }
                     });
