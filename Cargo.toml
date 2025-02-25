@@ -8,8 +8,8 @@ repository = "https://github.com/paritytech/substrate-contracts-node"
 
 [workspace]
 resolver = "2"
-members = ["node", "runtime", "parachain-runtime"]
-
+members = ["node", "runtime", "parachain-runtime","smart_contract"]
+exclude = ["smart_contract"]
 [profile.release]
 panic = 'unwind'
 

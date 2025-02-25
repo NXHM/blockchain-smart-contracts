@@ -1,0 +1,86 @@
+{
+    "clientName": "Thunder Client",
+    "collectionName": "TESIS",
+    "collectionId": "ea77b744-6e84-4556-bafc-0e8786f902f7",
+    "dateExported": "2024-10-18T08:00:12.608Z",
+    "version": "1.2",
+    "folders": [],
+    "requests": [
+        {
+            "_id": "60e36719-ff32-4a1a-9fb0-b2e5a8a782e9",
+            "colId": "ea77b744-6e84-4556-bafc-0e8786f902f7",
+            "containerId": "",
+            "name": "http://localhost:3000/create_user_based_on_existing_address",
+            "url": "http://localhost:3000/create_user_with_existing_address",
+            "method": "POST",
+            "sortNum": 10000,
+            "created": "2024-10-18T07:56:55.119Z",
+            "modified": "2024-10-18T07:56:55.119Z",
+            "headers": [],
+            "body": {
+                "type": "json",
+                "raw": "{\n    \"address\": \"\",\n    \"name\": \"Juan\",\n    \"lastname\": \"Pérez\",\n    \"dni\": \"12345678\",\n    \"email\": \"juan.perez@example.com\",\n    \"role\": 0\n}",
+                "form": []
+            }
+        },
+        {
+            "_id": "6ea05262-c8d5-42b4-a0cb-5e3c27f19c97",
+            "colId": "ea77b744-6e84-4556-bafc-0e8786f902f7",
+            "containerId": "",
+            "name": "http://localhost:3000/get_accounts/12345678",
+            "url": "http://localhost:3000/get_accounts/12345678",
+            "method": "GET",
+            "sortNum": 20000,
+            "created": "2024-10-18T07:57:15.199Z",
+            "modified": "2024-10-18T07:57:15.199Z",
+            "headers": []
+        },
+        {
+            "_id": "59bb3c49-912c-455e-a752-51ad910a50d3",
+            "colId": "ea77b744-6e84-4556-bafc-0e8786f902f7",
+            "containerId": "",
+            "name": "http://localhost:3000/create_user",
+            "url": "http://localhost:3000/create_user",
+            "method": "POST",
+            "sortNum": 30000,
+            "created": "2024-10-18T07:57:23.256Z",
+            "modified": "2024-10-18T07:57:23.256Z",
+            "headers": [],
+            "body": {
+                "type": "json",
+                "raw": "{\n    \"name\": \"Juan\",\n    \"lastname\": \"Pérez\",\n    \"dni\": \"12345678\",\n    \"email\": \"juan.perez@example.com\",\n    \"role\": 0\n}",
+                "form": []
+            }
+        },
+        {
+            "_id": "b1764e70-dc1b-40ad-bce2-ecee9eddadac",
+            "colId": "ea77b744-6e84-4556-bafc-0e8786f902f7",
+            "containerId": "",
+            "name": "http://localhost:3000/role/5Ew15DGipnMV4pP7SCbGtNkN4tUrhKt5hxo3h5etDYpLJsH5",
+            "url": "http://localhost:3000/role/5CUbhNz76TNiE3AjPR522qMTcKjQZXrhmfrmZZ7VvakoA1v2",
+            "method": "GET",
+            "sortNum": 40000,
+            "created": "2024-10-18T07:57:31.184Z",
+            "modified": "2024-10-18T07:57:31.184Z",
+            "headers": []
+        },
+        {
+            "_id": "cd2c9229-2c7d-47e2-85ad-050177953632",
+            "colId": "ea77b744-6e84-4556-bafc-0e8786f902f7",
+            "containerId": "",
+            "name": "http://localhost:3000/create_user",
+            "url": "http://localhost:3000/create_user",
+            "method": "POST",
+            "sortNum": 50000,
+            "created": "2024-10-18T07:58:02.674Z",
+            "modified": "2024-10-18T07:58:02.674Z",
+            "headers": [],
+            "body": {
+                "type": "json",
+                "raw": "{\n    \"name\": \"Juan\",\n    \"lastname\": \"Pérez\",\n    \"dni\": \"12345678\",\n    \"email\": \"juan.perez@example.com\",\n    \"role\": 0\n}",
+                "form": []
+            }
+        }
+    ],
+    "ref": "OdjGiKksL9Vrwd6znX9OeKLy8pNk-P9gmmbSYklu7AXbQdCiy1d1Ua6Nf3XRUWn0wwMkJexVILuzKh6ItsLSYA"
+}
