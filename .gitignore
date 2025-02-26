@@ -7,3 +7,9 @@
 .idea/
 rls*.log
 runtime/Cargo.lock
+
+
+assets_configo.rs
+contracts_configo.rs
+revive_configo.rs
+node_modules/

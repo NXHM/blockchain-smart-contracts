@@ -1,1 +1,0 @@
-../../runtime/src/assets_config.rs
