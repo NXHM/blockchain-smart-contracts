@@ -33,6 +33,65 @@ def create_and_save_plot(plot_data, title, x_label, y_label, filename):
     
     plt.close()
 
+# --- NUEVA FUNCIÓN PARA COMPARAR LATENCIA POR MODO ---
+
+def plot_latency_comparison_by_mode(data, route, total_transactions_filter=None):
+    """
+    Genera una gráfica que compara la latencia entre los modos 'sequential', 'concurrent' y 'batch'
+    para una ruta y un número de transacciones específicos.
+    """
+    df = pd.DataFrame(data)
+    
+    # 1. Filtrar por la ruta de interés
+    df_route = df[df['route'] == route].copy()
+
+    # 2. Opcionalmente, filtrar por un número específico de transacciones para una comparación justa
+    if total_transactions_filter:
+        df_route = df_route[df_route['totalTransactions'] == total_transactions_filter]
+
+    if df_route.empty:
+        print(f"No hay datos para la ruta '{route}' con el filtro de transacciones '{total_transactions_filter}'.")
+        return
+
+    # 3. Agrupar por modo de prueba ('testType')
+    test_groups = {}
+    for test_type, group in df_route.groupby('testType'):
+        # Ordenar por número de petición para que el eje X sea consistente
+        sorted_group = group.sort_values('requestNumber')
+        test_groups[test_type] = sorted_group
+
+    if not test_groups:
+        print(f"No se encontraron grupos de prueba para la ruta '{route}'.")
+        return
+
+    # 4. Preparar los datos para la gráfica genérica
+    plot_data = []
+    for test_type, entries in test_groups.items():
+        series = {
+            'x': entries['requestNumber'].tolist(),
+            'y': entries['latency'].tolist(),
+            'label': f'Modo {test_type.capitalize()}'
+        }
+        plot_data.append(series)
+
+    # 5. Generar y guardar la gráfica
+    sanitized_route = sanitize_filename(route)
+    tx_count_str = f"_{total_transactions_filter}tx" if total_transactions_filter else "_all_tx"
+    title = f'Comparación de Latencia por Modo de Prueba - Ruta: {route}'
+    if total_transactions_filter:
+        title += f' ({total_transactions_filter} Transacciones)'
+        
+    filename = f'latency_comparison_{sanitized_route}{tx_count_str}.png'
+    
+    create_and_save_plot(
+        plot_data,
+        title,
+        'Número de Petición',
+        'Latencia (ms)',
+        filename
+    )
+
+
 # --- FUNCIONES ESPECIALIZADAS PARA CADA TIPO DE GRÁFICO ---
 
 def plot_metric_vs_time(data, metric, route):
@@ -223,3 +282,38 @@ def plot_transaction_speed(data, interval_seconds=60):
     filename = 'transaction_speed_summary.png'
     
     create_and_save_plot(plot_data, title, x_label, y_label, filename)
+
+# --- SCRIPT PRINCIPAL (EJEMPLO DE CÓMO USAR LA NUEVA FUNCIÓN) ---
+# (Este bloque se debe adaptar en tu script principal que lee el JSON y llama a las funciones)
+
+if __name__ == '__main__':
+    try:
+        with open('../performance_log.json', 'r') as f:
+            all_data = [json.loads(line) for line in f]
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"Error al leer o procesar el archivo JSON: {e}")
+        all_data = []
+
+    if all_data:
+        # Agrupar datos por ruta
+        data_by_route = {}
+        for record in all_data:
+            route = record.get('route')
+            if route not in data_by_route:
+                data_by_route[route] = []
+            data_by_route[route].append(record)
+
+        # Generar gráficos para cada ruta
+        for route, data in data_by_route.items():
+            plot_metric_vs_time(data, 'latency', route)
+            plot_metric_vs_transaction(data, 'latency', route)
+            plot_metric_vs_time(data, 'transactionCost', route)
+            plot_metric_vs_transaction(data, 'transactionCost', route)
+            
+            # --- LLAMADA A LA NUEVA FUNCIÓN ---
+            # Genera la gráfica comparativa para 100 transacciones (ajusta el número si es necesario)
+            plot_latency_comparison_by_mode(data, route, total_transactions_filter=100)
+
+        # Gráficos globales
+        plot_latency_vs_cost(all_data)
+        plot_transaction_speed(all_data)

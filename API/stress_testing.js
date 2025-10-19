@@ -1,7 +1,7 @@
 require('dotenv').config();  // Cargar las variables de entorno desde el archivo .env
 const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');  // Para generar identificadores únicos
-const faker = require('faker'); // Para generar datos ficticios
+const { faker } = require('@faker-js/faker'); // Para generar datos ficticios
 const readline = require('readline'); // Para elegir los métodos desde la consola
 const fs = require('fs');
 const path = require('path');
@@ -26,6 +26,19 @@ function loadAccountIds() {
     }
 }
 
+// Function to generate random data
+function generateTestData() {
+    return {
+        name: faker.string.alpha({ count: 5 }),
+        lastname: faker.string.alpha({ count: 6 }),
+        // FIX: Replaced faker.datatype.number with faker.number.int
+        dni: faker.number.int({ min: 10000000, max: 99999999 }).toString(),
+        email: faker.string.alphanumeric(10) + '12@gmail.com',
+        // FIX: Also replaced here for consistency
+        role: faker.number.int({ min: 0, max: 1 }),
+    };
+}
+
 // --- FUNCIONES DE PRUEBA ---
 
 async function runCreateUserTest(mode) {
@@ -35,12 +48,16 @@ async function runCreateUserTest(mode) {
 
     const makeRequest = async () => {
         requestNumber++;
-        const name = faker.name.findName();
-        const email = faker.internet.email();
+        const testData = generateTestData(); // Usar la función para generar datos
+
         try {
-            await axios.post(`${FULL_URL}/create_user`, {
-                name: name,
-                email: email
+            // Se cambia el endpoint a /create_user_with_dynamic_gas
+            await axios.post(`${FULL_URL}/create_user_with_dynamic_gas`, {
+                name: testData.name,
+                lastname: testData.lastname,
+                dni: testData.dni,
+                email: testData.email,
+                role: testData.role
             }, {
                 params: {
                     requestNumber: requestNumber,
@@ -74,54 +91,6 @@ async function runCreateUserTest(mode) {
         }
     }
     console.log('Create User test finished.');
-}
-
-async function runAssignRoleTest(mode) {
-    console.log(`Running Assign Role test in ${mode} mode...`);
-    const accounts = loadAccountIds();
-    if (accounts.length === 0) {
-        console.log('No accounts found in account_ids.txt. Skipping Assign Role test.');
-        return;
-    }
-    const groupID = uuidv4();
-    let requestNumber = 0;
-    const totalRequests = accounts.length;
-
-    const makeRequest = async (accountId) => {
-        requestNumber++;
-        const role = Math.round(Math.random()); // 0 o 1
-        try {
-            await axios.post(`${FULL_URL}/assign_role`, {
-                accountId: accountId,
-                role: role
-            }, {
-                params: {
-                    requestNumber: requestNumber,
-                    totalTransactions: totalRequests,
-                    testType: mode,
-                    groupID: groupID
-                }
-            });
-        } catch (error) {
-            console.error(`Error in Assign Role request for ${accountId}:`, error.message);
-        }
-    };
-
-    if (mode === 'sequential') {
-        for (const accountId of accounts) {
-            await makeRequest(accountId);
-        }
-    } else if (mode === 'concurrent') {
-        const promises = accounts.map(accountId => makeRequest(accountId));
-        await Promise.all(promises);
-    } else if (mode === 'batch') {
-        for (let i = 0; i < accounts.length; i += SIMULTANEOUS_REQUESTS) {
-            const batch = accounts.slice(i, i + SIMULTANEOUS_REQUESTS);
-            const batchPromises = batch.map(accountId => makeRequest(accountId));
-            await Promise.all(batchPromises);
-        }
-    }
-    console.log('Assign Role test finished.');
 }
 
 async function runGrantPermissionTest(mode) {
@@ -275,12 +244,14 @@ async function runCreateUserWithDynamicGasTest(mode) {
 
     const makeRequest = async () => {
         requestNumber++;
-        const name = faker.name.findName();
-        const email = faker.internet.email();
+        const testData = generateTestData(); // Usar la función para generar datos
         try {
             await axios.post(`${FULL_URL}/create_user_with_dynamic_gas`, {
-                name: name,
-                email: email
+                name: testData.name,
+                lastname: testData.lastname,
+                dni: testData.dni,
+                email: testData.email,
+                role: testData.role
             }, {
                 params: {
                     requestNumber: requestNumber,
@@ -329,8 +300,8 @@ function showMenu() {
     console.log('1. Run all tests (Sequential)');
     console.log('2. Run all tests (Concurrent)');
     console.log('3. Run all tests (Batch)');
-    console.log('4. Run Create User test');
-    console.log('5. Run Assign Role test');
+    console.log('4. Run all tests (All modes)');
+    console.log('5. Run Create User test');
     console.log('6. Run Grant Permission test');
     console.log('7. Run Has Permission test');
     console.log('8. Run Get Role test');
@@ -346,7 +317,6 @@ async function runSelectedTests(tests, mode) {
 
 const allTests = [
     runCreateUserTest,
-    runAssignRoleTest,
     runGrantPermissionTest,
     runHasPermissionTest,
     runGetRoleTest,
@@ -381,11 +351,17 @@ function main() {
                 await runSelectedTests(allTests, 'batch');
                 break;
             case '4':
+                console.log('--- Running all tests in SEQUENTIAL mode ---');
+                await runSelectedTests(allTests, 'sequential');
+                console.log('--- Running all tests in CONCURRENT mode ---');
+                await runSelectedTests(allTests, 'concurrent');
+                console.log('--- Running all tests in BATCH mode ---');
+                await runSelectedTests(allTests, 'batch');
+                console.log('--- All test modes completed ---');
+                break;
+            case '5':
                 askForMode(runCreateUserTest);
                 return; // Evita que se vuelva a llamar a main() inmediatamente
-            case '5':
-                askForMode(runAssignRoleTest);
-                return;
             case '6':
                 askForMode(runGrantPermissionTest);
                 return;

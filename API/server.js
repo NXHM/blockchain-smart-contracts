@@ -33,7 +33,7 @@ app.use(logRequestToJson);
 const ACCOUNT_IDS_FILE = path.join(__dirname, 'account_ids.txt');
 
 // Contract Dirección y ABI
-const CONTRACT_ADDRESS = '5EVJVRqCzgEi2E6LaBvduxBAs47z1uPCQubYqvq6TE1SHEaM';
+const CONTRACT_ADDRESS = '5FeS8fMGbXaMSbSbFqnzJwZWtLr9aFUPf1ouvPhCsz6tCQ3d';
 const CONTRACT_ABI_PATH = path.resolve(__dirname, '../target/ink/smart_contract/smart_contract.json');
 
 // Variables para performance monitoring

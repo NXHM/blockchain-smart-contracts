@@ -50,7 +50,9 @@ function getParamsLength(req) {
 
 // Middleware para medir la duración de la solicitud y registrar logs en formato txt
 function logRequestToTxt(req, res, next) {
-    const startTime = Date.now();
+    // MODIFICACIÓN: Usar process.hrtime.bigint() para un tiempo de inicio monotónico y preciso.
+    const startTime = process.hrtime.bigint();
+    
     const { cpuUsage: startCpu, memUsage: startMem } = getSystemUsage();
     const paramsLength = getParamsLength(req);
     
@@ -58,7 +60,11 @@ function logRequestToTxt(req, res, next) {
     res.locals.requestNumber = req.query.requestNumber || req.body.requestNumber || 'N/A';
 
     res.on('finish', () => {
-        const duration = Date.now() - startTime;
+        // MODIFICACIÓN: Calcular la duración a partir del tiempo de alta precisión.
+        const endTime = process.hrtime.bigint();
+        // La diferencia está en nanosegundos, se convierte a milisegundos.
+        const duration = Number(endTime - startTime) / 1_000_000;
+
         const { cpuUsage: endCpu, memUsage: endMem } = getSystemUsage();
         const groupID = req.body.groupID || req.query.groupID || 'N/A';
         const totalTransactions = req.body.totalTransactions || req.query.totalTransactions || 'N/A';
@@ -76,7 +82,7 @@ function logRequestToTxt(req, res, next) {
         RefTime (Gas Computacional): ${res.locals.refTime || 'N/A'}
         ProofSize: ${res.locals.proofSize || 'N/A'}
         Tip: ${res.locals.tip || 'N/A'}
-        Duration: ${duration} ms
+        Duration: ${duration.toFixed(3)} ms
         CPU Usage (start): ${startCpu.toFixed(2)}%
         CPU Usage (end): ${endCpu.toFixed(2)}%
         RAM Usage (start): ${startMem.toFixed(2)}%
@@ -89,7 +95,7 @@ function logRequestToTxt(req, res, next) {
 
         // Escribir el log en archivo txt
         fs.appendFile(LOG_FILE_PATH, logEntry, (err) => {
-            if (err) throw new Error(`Error al escribir en el log: ${err.message}`);
+            if (err) console.error(`Error al escribir en el log de texto: ${err.message}`);
         });
     });
 
@@ -98,7 +104,9 @@ function logRequestToTxt(req, res, next) {
 
 // Middleware para medir la duración de la solicitud y registrar logs en formato JSON
 function logRequestToJson(req, res, next) {
-    const startTime = Date.now();
+    // MODIFICACIÓN: Usar process.hrtime.bigint() para un tiempo de inicio monotónico y preciso.
+    const startTime = process.hrtime.bigint();
+
     const { cpuUsage: startCpu, memUsage: startMem } = getSystemUsage();
     const paramsLength = getParamsLength(req);
     
@@ -106,7 +114,11 @@ function logRequestToJson(req, res, next) {
     res.locals.requestNumber = req.query.requestNumber || req.body.requestNumber || 'N/A';
 
     res.on('finish', () => {
-        const duration = Date.now() - startTime;
+        // MODIFICACIÓN: Calcular la duración a partir del tiempo de alta precisión.
+        const endTime = process.hrtime.bigint();
+        // La diferencia está en nanosegundos, se convierte a milisegundos.
+        const duration = Number(endTime - startTime) / 1_000_000;
+        
         const { cpuUsage: endCpu, memUsage: endMem } = getSystemUsage();
         const groupID = req.body.groupID || req.query.groupID || 'N/A';
         const totalTransactions = req.body.totalTransactions || req.query.totalTransactions || 'N/A';
@@ -124,7 +136,7 @@ function logRequestToJson(req, res, next) {
             refTime: res.locals.refTime || 'N/A',
             proofSize: res.locals.proofSize || 'N/A',
             tip: res.locals.tip || 'N/A',
-            duration: `${duration} ms`,
+            duration: `${duration.toFixed(3)} ms`,
             cpuUsageStart: `${startCpu.toFixed(2)}%`,
             cpuUsageEnd: `${endCpu.toFixed(2)}%`,
             ramUsageStart: `${startMem.toFixed(2)}%`,
@@ -138,33 +150,31 @@ function logRequestToJson(req, res, next) {
 
         if (!fileExists) {
             try {
-                const initialContent = `[${logEntryString}]`;
-                fs.writeFileSync(logFileJsonPath, initialContent);
+                // Iniciar el archivo como un array JSON válido
+                fs.writeFileSync(logFileJsonPath, `[${logEntryString}]`);
                 fileExists = true;
             } catch (err) {
                 console.error(`Error al crear el archivo de log JSON: ${err.message}`);
             }
         } else {
-            try {
-                fs.readFile(logFileJsonPath, 'utf8', (err, data) => {
-                    if (err) return console.error(`Error al leer el archivo de log JSON: ${err.message}`);
+            // Para añadir al array, eliminamos el ']' final, añadimos una coma y el nuevo objeto, y cerramos con ']'
+            fs.readFile(logFileJsonPath, 'utf8', (err, data) => {
+                if (err) return console.error(`Error al leer el archivo de log JSON: ${err.message}`);
+                
+                let newData = data.trim();
+                
+                // Si el archivo está vacío o es un array vacío, reinícialo
+                if (newData.length <= 1 || newData === '[]') {
+                    newData = `[${logEntryString}]`;
+                } else {
+                    // Quita el corchete de cierre, añade coma, nuevo objeto y el corchete de nuevo
+                    newData = newData.slice(0, -1) + `,${logEntryString}]`;
+                }
 
-                    let newData = data.trim();
-
-                    if (newData.length === 0 || newData === '[]') {
-                        newData = `[${logEntryString}]`;
-                    } else {
-                        newData = newData.slice(0, -1);
-                        newData += `,${logEntryString}]`;
-                    }
-
-                    fs.writeFile(logFileJsonPath, newData, (err) => {
-                        if (err) return console.error(`Error al escribir en el archivo de log JSON: ${err.message}`);
-                    });
+                fs.writeFile(logFileJsonPath, newData, (err) => {
+                    if (err) return console.error(`Error al escribir en el archivo de log JSON: ${err.message}`);
                 });
-            } catch (err) {
-                console.error(`Error al actualizar el archivo de log JSON: ${err.message}`);
-            }
+            });
         }
     });
 
