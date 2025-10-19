@@ -33,7 +33,7 @@ app.use(logRequestToJson);
 const ACCOUNT_IDS_FILE = path.join(__dirname, 'account_ids.txt');
 
 // Contract Dirección y ABI
-const CONTRACT_ADDRESS = '5EbpjeKuJyAjs1qVfkHdpNcPUum1sX3LPrf17UpAfMWxgjYq';
+const CONTRACT_ADDRESS = '5EVJVRqCzgEi2E6LaBvduxBAs47z1uPCQubYqvq6TE1SHEaM';
 const CONTRACT_ABI_PATH = path.resolve(__dirname, '../target/ink/smart_contract/smart_contract.json');
 
 // Variables para performance monitoring
@@ -285,6 +285,106 @@ async function addUser(alice, newAccount, userInfo, role, gasLimit, res, mode) {
     });
 }
 
+// Modificar la función assignRole para incluir el tip en la transacción
+async function assignRole(alice, newAccount, role, userInfo, gasLimit) {
+    const tip = getTip(); // Obtener el tip usando la función getTip
+    const assignRoleTx = contract.tx.assignRole({ value: 0, gasLimit }, newAccount.address, role, userInfo);
+    return new Promise((resolve, reject) => {
+        assignRoleTx.signAndSend(alice, { tip }, (result) => {
+            if (result.status.isInBlock) {
+                console.log(`Transaction included at blockHash ${result.status.asInBlock}`);
+            } else if (result.status.isFinalized) {
+                console.log(`Transaction finalized at blockHash ${result.status.asFinalized}`);
+                resolve(result);
+            } else if (result.isError) {
+                console.error(`Transaction error: ${result.toHuman()}`);
+                reject(result);
+            }
+        });
+    });
+}
+
+// Modificar la función executeContractAndGetGas para usar el nonce
+async function executeContractAndGetGas(contract, signer, res, ...params) {
+    try {
+        updateTransactionCount(); // Actualizar el contador de transacciones
+        const tip = getTip();
+        const nonce = await getCurrentNonce(signer.address); // Obtener el nonce actual
+        // Definir un límite de gas alto para asegurar la ejecución (sin estimación previa)
+        const gasLimit = api.registry.createType('WeightV2', {
+            refTime: api.registry.createType('Compact<u64>', 20000000000), // Ajusta este valor según sea necesario
+            proofSize: api.registry.createType('Compact<u64>', 10000000)
+        });
+
+        // Inicializar refTime y proofSize fuera del contexto de los eventos
+        let refTime = null;
+        let proofSize = null;
+
+        // Llamada al método del contrato
+        const tx = contract.tx.addUser(
+            { value: 0, gasLimit }, // Opciones de la transacción
+            ...params // Parámetros del método
+        );
+
+        // Enviar la transacción y esperar a la finalización
+        return new Promise((resolve, reject) => {
+            tx.signAndSend(signer, { nonce, tip }, (result) => { // Incluir nonce y tip
+                if (result.status.isFinalized) {
+                    //console.log('Transacción finalizada en bloque:', result.status.asFinalized);
+
+                    // Iterar sobre los eventos para encontrar el peso (gas) consumido
+                    result.events.forEach(({ event: { data, method, section } }) => {
+                        console.log(`Event: ${section}.${method} - ${JSON.stringify(data.toHuman())}`);
+
+                        if (section === 'system' && method === 'ExtrinsicSuccess') {
+                            // Obtener el gas computacional (refTime) y el proofSize del evento ExtrinsicSuccess
+                            if (data && data.length > 0 && data[0].weight) {
+                                refTime = data[0].weight.refTime;
+                                proofSize = data[0].weight.proofSize;
+                                console.log(`Gas (refTime) consumido: ${refTime}`);
+                                console.log(`ProofSize consumido: ${proofSize}`);
+                            }
+                        }
+                    });
+
+                    // Guardar refTime, proofSize, tip y el estado de éxito en res.locals
+                    res.locals.refTime = refTime || 'N/A'; // Si no se encuentra, asignar 'N/A'
+                    res.locals.proofSize = proofSize || 'N/A'; // Si no se encuentra, asignar 'N/A'
+                    res.locals.tip = tip.toString(); // Guardar el valor del tip
+                    res.locals.transactionSuccess = true; // Transacción exitosa
+                    res.locals.transactionCount = transactionCount; // Guardamos el contador de la transacción
+
+                    resolve({
+                        blockHash: result.status.asFinalized.toString(),
+                        gasUsed: refTime ? refTime.toHuman() : 'No se encontró el consumo de gas',
+                        proofSizeUsed: proofSize ? proofSize.toHuman() : 'No se encontró el consumo de proofSize',
+                        tip: tip.toString() // Retorna el valor del tip
+                    });
+                } else if (result.isError) {
+                    console.error('Error en la transacción:', result);
+
+                    // Guardar el estado de fallo en res.locals
+                    res.locals.transactionSuccess = false; // Transacción fallida
+                    res.locals.refTime = 0; // Gas 0 cuando falla la transacción
+                    res.locals.proofSize = 0; // proofSize 0 cuando falla la transacción
+                    res.locals.tip = '0'; // Tip 0 cuando falla la transacción
+
+                    reject(new Error('Error en la transacción.'));
+                }
+            });
+        });
+
+    } catch (error) {
+        console.error(`Error al ejecutar la transacción: ${error.message}`);
+        res.locals.transactionSuccess = false; // Transacción fallida
+        res.locals.refTime = 0; // Gas 0 cuando falla la transacción
+        res.locals.proofSize = 0; // proofSize 0 cuando falla la transacción
+        res.locals.tip = '0'; // Tip 0 cuando falla la transacción
+        throw error;
+    }
+}
+
+
 // --- ENDPOINTS ---
 
 // (1) CREACIÓN DE USUARIO EN POLKADOT (SIN VALIDACIÓN EN FABRIC)
@@ -450,10 +550,166 @@ app.get('/role/:publicAddress', async (req, res) => {
     }
 });
 
+// Alias para obtener el rol de un usuario usando /get_role/:publicAddress
+app.get('/get_role/:publicAddress', async (req, res) => {
+    // Imprimir los parámetros recibidos
+    console.log('Parámetros recibidos en /get_role:', req.params);
+    
+    // Reutilizar el manejador de la ruta /role/:publicAddress
+    req.url = `/role/${req.params.publicAddress}`;
+    return app._router.handle(req, res, () => {});
+});
+
 app.get('/alice_account_id', async (req, res) => {
     const keyring = new Keyring({ type: 'sr25519' });
     alice = keyring.addFromUri('//Alice');
     res.status(200).send(`Alice's account: ${alice.address}`);
+});
+
+
+// Ruta POST para crear un usuario usando la función addUser con gas dinámico
+app.post('/create_user_with_dynamic_gas', async (req, res) => {
+    // Imprimir los datos recibidos del batch
+    console.log('Datos recibidos en /create_user_with_dynamic_gas:', req.body);
+    
+    const { name, lastname, dni, email, role, groupID, totalTransactions, requestNumber, testType } = req.body;
+
+    try {
+        const keyring = new Keyring({ type: 'sr25519' });
+        alice = keyring.addFromUri('//Alice'); // Usar la cuenta de Alice para firmar la transacción
+
+        const newAccount = createNewAccount(); // Genera una nueva cuenta
+
+        const userInfo = {
+            name: name,
+            lastname: lastname,
+            dni: dni,
+            email: email
+        };
+
+        // Transferir fondos a la nueva cuenta y esperar hasta que la transacción sea finalizada
+        await transferFunds(alice, newAccount.address, 1000000000000);
+
+        // Definir un límite de gas alto para la transacción (ajusta según tu necesidad)
+        const gasLimit = api.registry.createType('WeightV2', {
+            refTime: api.registry.createType('Compact<u64>', 20000000000), // Ajusta este valor según lo necesario
+            proofSize: api.registry.createType('Compact<u64>', 10000000)
+        });
+
+        // Ejecutar la transacción del contrato (addUser) y guardar el gas consumido y tip
+        await addUser(alice, newAccount, userInfo, role, gasLimit, res, testType);
+        
+        // Guardar el Account ID en 'account_ids.txt'
+        fs.appendFileSync(ACCOUNT_IDS_FILE, `${newAccount.address}\n`, 'utf8');
+
+        // Responder con éxito
+        res.status(200).json({
+            message: 'Usuario creado con éxito',
+            blockHash: res.locals.blockHash,
+            gasUsed: res.locals.refTime,
+            proofSize: res.locals.proofSize,
+            tip: res.locals.tip
+        });
+
+    } catch (error) {
+        console.error('Error al crear el usuario:', error);
+        res.status(500).json({ error: `Error al crear el usuario: ${error.message}` });
+    }
+});
+
+// Endpoint para verificar si un permiso existe entre dos usuarios
+app.get('/has_permission/:granter/:grantee', async (req, res) => {
+    const { granter, grantee } = req.params;
+    const { requestNumber, groupID, totalTransactions, testType } = req.query;
+
+    // Validar que ambos parámetros estén presentes
+    if (!granter || !grantee) {
+        res.locals.transactionSuccess = false;
+        return res.status(400).send('Parámetros "granter" y "grantee" son requeridos.');
+    }
+
+    res.locals.requestNumber = requestNumber || 'N/A';
+    res.locals.groupID = groupID || 'N/A';
+    res.locals.totalTransactions = totalTransactions || 'N/A';
+    res.locals.testType = testType || 'N/A'; // Asegurar que testType se almacene correctamente
+
+    try {
+        const granterAccountId = api.createType('AccountId', granter);
+        const granteeAccountId = api.createType('AccountId', grantee);
+
+        const gasLimit = api.registry.createType('WeightV2', {
+            refTime: api.registry.createType('Compact<u64>', 10000000000),
+            proofSize: api.registry.createType('Compact<u64>', 10000000)
+        });
+
+        const { output } = await contract.query.hasPermission(granterAccountId, { value: 0, gasLimit }, granterAccountId, granteeAccountId);
+
+        if (output) {
+            res.locals.transactionSuccess = true;
+            const hasPermission = output.toHuman();
+            res.status(200).json({ hasPermission });
+        } else {
+            res.locals.transactionSuccess = false;
+            res.status(404).send('No se pudo obtener el permiso');
+        }
+
+    } catch (error) {
+        res.locals.transactionSuccess = false;
+        console.error('Error al consultar el permiso:', error);
+        res.status(500).send(`Error al consultar el permiso: ${error.message}`);
+    }
+});
+
+// Ruta para obtener las cuentas asociadas a un dni
+app.get('/get_accounts/:dni', async (req, res) => {
+    const { dni } = req.params;
+    const { requestNumber, groupID, totalTransactions } = req.query;
+
+    res.locals.requestNumber = requestNumber || 'N/A';
+    res.locals.groupID = groupID || 'N/A';
+    res.locals.totalTransactions = totalTransactions || 'N/A';
+
+    try {
+        console.log(`Attempting to fetch accounts for DNI: ${dni}`);
+
+        const gasLimit = api.registry.createType('WeightV2', {
+            refTime: api.registry.createType('Compact<u64>', 10000000000),
+            proofSize: api.registry.createType('Compact<u64>', 10000000)
+        });
+
+        console.log('Querying contract...');
+        const { result, output } = await contract.query.getAccounts(api.createType('AccountId', CONTRACT_ADDRESS), { value: 0, gasLimit }, dni);
+
+        console.log('Query result:', result.toHuman());
+        console.log('Query output:', output ? output.toHuman() : 'No output');
+
+        if (result.isOk) {
+            res.locals.transactionSuccess = true;
+            if (output) {
+                const accounts = output.toJSON();
+                console.log('Parsed accounts:', accounts);
+                
+                if (accounts && accounts.ok && Array.isArray(accounts.ok) && accounts.ok.length > 0) {
+                    console.log(`Found ${accounts.ok.length} accounts for DNI ${dni}`);
+                    res.json(accounts.ok);
+                } else {
+                    console.log(`No accounts found for DNI ${dni}`);
+                    res.status(404).send(`No accounts found for dni ${dni}`);
+                }
+            } else {
+                console.log('Query successful but no output returned');
+                res.status(404).send(`No accounts found for dni ${dni}`);
+            }
+        } else {
+            res.locals.transactionSuccess = false;
+            console.error('Contract call failed:', result.asErr.toHuman());
+            res.status(500).send('Error fetching accounts: Contract call failed');
+        }
+    } catch (error) {
+        res.locals.transactionSuccess = false;
+        console.error(`Error fetching accounts for dni ${dni}:`, error);
+        res.status(500).send(`Error fetching accounts: ${error.message}`);
+    }
 });
 
 // Iniciar el servidor

@@ -13,3 +13,4 @@ assets_configo.rs
 contracts_configo.rs
 revive_configo.rs
 node_modules/
+venv/
